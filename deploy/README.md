@@ -16,7 +16,7 @@ inside the Compose network.
 ## Entry Points
 
 - Browser/frontend entrypoint: `http://localhost:8080` through gateway only.
-- Do not point frontend code at `auth`, `file`, `parser`, `knowledge`, `qa`,
+- Do not point frontend code at `auth`, `file`, `knowledge`, `qa`,
   `document`, `ai-gateway`, PostgreSQL, Redis, Qdrant, or MinIO directly.
 - Internal service ports are exposed for local debugging only.
 
@@ -90,12 +90,10 @@ If Docker has no local images, install them with:
 ```powershell
 docker pull postgres:16-alpine
 docker pull redis:7-alpine
-docker pull qdrant/qdrant:v1.18.2
 docker pull minio/minio:RELEASE.2025-09-07T16-13-09Z
 docker pull minio/mc:RELEASE.2025-08-13T08-35-41Z
 docker pull golang:1.25-alpine
 docker pull alpine:3.22
-docker pull python:3.12-slim
 ```
 
 Then build service images:
@@ -106,59 +104,8 @@ docker compose build
 docker compose --profile ai build
 ```
 
-Docker build priority for this repository is: builds must run first, then be
-fast, then produce small images, then reduce memory use, then reduce storage
-use. For that reason the default Go Docker build args keep checksum verification
-on and use the Go toolchain's official proxy/sumdb defaults:
-
-```text
-GO_DOCKER_GOPROXY=https://proxy.golang.org,direct
-GO_DOCKER_GOSUMDB=sum.golang.org
-```
-
-For mainland China networks, use an explicit override instead of changing the
-repository default:
-
-```powershell
-$env:GO_DOCKER_GOPROXY = "https://goproxy.cn,direct"
-$env:GO_DOCKER_GOSUMDB = "sum.golang.google.cn"
-docker compose build migrate-file
-```
-
-Do not set `GOSUMDB=off` for normal builds. `goproxy.cn` may proxy
-`sum.golang.org` checksum requests; if that mirror path returns bad 404s, goose
-or service module verification can fail during migration image builds. Pairing a
-module proxy with `sum.golang.google.cn` keeps checksum verification enabled
-while avoiding that third-party sumdb proxy path.
-
-Optional build args for local acceleration:
-
-| Variable | Use |
-| --- | --- |
-| `DOCKER_IMAGE_REGISTRY_PREFIX` | Prefix `FROM` images with a local/enterprise registry mirror. Include the trailing slash. |
-| `POSTGRES_IMAGE` / `REDIS_IMAGE` / `QDRANT_IMAGE` / `MINIO_IMAGE` / `MINIO_MC_IMAGE` | Override Compose infrastructure images while keeping pinned defaults. |
-| `GO_DOCKER_GOPROXY` / `GO_DOCKER_GOSUMDB` | Override Go module proxy and checksum database for Go service and migration builds. |
-| `ALPINE_MIRROR` | Override Alpine apk repositories, for example a university mirror ending in `/alpine`. |
-| `DEBIAN_APT_MIRROR` / `DEBIAN_SECURITY_APT_MIRROR` | Override Parser Debian apt repositories. |
-| `PIP_INDEX_URL` / `UV_DEFAULT_INDEX` / `UV_INDEX` | Override Parser Python package indexes. |
-
-Detailed setup, mirror diagnostics, and storage cleanup are documented in
-[`docs/runbooks/docker-build-environment.md`](../docs/runbooks/docker-build-environment.md).
-
-Before changing daemon mirrors or proxies, run:
-
-```powershell
-python3 ../scripts/check_docker_environment.py --profile all --clean-env
-```
-
-Use the results to choose: explicit registry rewrite first, working daemon
-mirror second, Docker daemon proxy last.
-
-The local Qdrant, MinIO server, MinIO `mc`, Redis, PostgreSQL, and Alpine
-runtime images are pinned to explicit tags in this repository. MinIO uses one
-server image plus one `mc` initialization image; `minio-init` is not a second
-MinIO server. Update this document and
-`docs/architecture/technology-decisions.md` in the same PR when changing them.
+The local MinIO server, MinIO `mc`, Redis, PostgreSQL, and Alpine runtime
+images are pinned to explicit tags in this repository.
 
 ## Ports
 
@@ -167,14 +114,12 @@ MinIO server. Update this document and
 | gateway | 8080 | 8080 | Browser/backend entrypoint |
 | auth | 8001 | 8001 | Internal auth service |
 | file | 8082 | 8082 | Internal file service |
-| knowledge | 8083 | 8083 | Internal knowledge service |
+| knowledge | 8083 | 8083 | Vendor contract adapter |
 | qa | 8084 | 8084 | Internal QA service |
 | document | 8085 | 8085 | Internal document service |
 | ai-gateway | 8086 | 8086 | Model/profile service for AI features |
-| parser | 8087 | 8087 | Internal parser service |
 | postgres | 5432 | 5432 | Local relational databases |
 | redis | 6379 | 6379 | Sessions, queues, coordination |
-| qdrant | 6333/6334 | 6333/6334 | Vector database |
 | minio | 9000/9001 | 9000/9001 | Object storage and console |
 
 Override host ports in `deploy/.env`.
@@ -193,16 +138,9 @@ Override host ports in `deploy/.env`.
 | `AUTH_DATABASE_URL` | auth | yes | Auth PostgreSQL DSN. |
 | `FILE_DATABASE_URL` | file | yes | File metadata PostgreSQL DSN. |
 | `FILE_STORAGE_BACKEND` | file | no | `local` in Compose for durable local smoke tests. |
-| `DATABASE_URL` | knowledge | yes | Knowledge PostgreSQL DSN. |
-| `FILE_SERVICE_BASE_URL` | knowledge | yes | Internal File Service URL. |
-| `PARSER_SERVICE_BASE_URL` | knowledge | yes | Internal Parser Service URL. |
-| `PARSER_SERVICE_TOKEN` | knowledge/parser | yes | Local service token for Parser Service calls. |
-| `KNOWLEDGE_REDIS_ADDR` | knowledge | yes | Redis/asynq endpoint. |
-| `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_DIMENSION` | knowledge | no | Defaults to local hashing embeddings for deterministic local retrieval tests. |
-| `KNOWLEDGE_QDRANT_URL` / `QDRANT_COLLECTION` | knowledge | no | Optional Qdrant REST URL and collection; leave URL empty to use Knowledge's in-memory vector index. |
-| `KNOWLEDGE_AI_GATEWAY_BASE_URL` / `AI_GATEWAY_EMBEDDING_PROFILE_ID` | knowledge | no | AI Gateway embedding profile wiring. Requires `--profile ai` and real provider credentials when `EMBEDDING_PROVIDER=ai_gateway`. |
-| `RERANK_MODEL` / `RERANK_PROFILE_ID` | knowledge | no | AI Gateway rerank wiring. Empty `RERANK_MODEL` keeps rerank requests on the local no-op fallback. |
-| `PARSER_BACKEND` | parser | no | Defaults to `ppstructurev3` for structured PDF/image parsing; set `document` only for local text/Office parsing without OCR dependencies. |
+| `DATABASE_URL` | knowledge | no | Optional PostgreSQL for parser-config admin routes. |
+| `VENDOR_RUNTIME_URL` | knowledge | yes | RAGFlow vendor HTTP base URL (default in Compose: host gateway to :9380). |
+| `KNOWLEDGE_AUTO_START_INGESTION` | knowledge | no | Auto-call vendor `/documents/parse` after upload (default `true`). |
 | `QA_DATABASE_URL` | qa | yes | QA PostgreSQL DSN. |
 | `KNOWLEDGE_SERVICE_URL` | qa | yes | Internal Knowledge Service URL. |
 | `AI_GATEWAY_URL` | qa | yes | Internal chat completions URL; QA real model calls require `--profile ai`. |
@@ -225,11 +163,6 @@ Override host ports in `deploy/.env`.
 | `AI_GATEWAY_CREDENTIAL_ENCRYPTION_KEY` | ai-gateway | yes | Local encryption key placeholder. |
 
 ## Health And Readiness
-
-If the current shell has `HTTP_PROXY`/`HTTPS_PROXY`/`http_proxy`/`https_proxy`,
-set `NO_PROXY=localhost,127.0.0.1,::1` before local checks, or use
-`curl --noproxy '*'`. Otherwise the request can go through the proxy and return
-the proxy's status instead of the local container's status.
 
 Use gateway for the top-level signal:
 
@@ -265,10 +198,7 @@ and MCP/cross-service smoke coverage.
 
 ## Seed Data
 
-`seed-local` applies `deploy/seeds/001-local-demo-seed.sql` after Auth,
-Knowledge, Document, and QA migrations. `seed-local-ai` applies
-`deploy/seeds/002-ai-gateway-model-profiles.sql` after the AI Gateway migration.
-Both scripts are idempotent and use deterministic IDs with `ON CONFLICT`.
+`seed-local` applies `deploy/seeds/001-local-demo-seed.sql` after migrations:
 
 CI-safe checks validate static seed contracts without starting containers:
 
@@ -346,18 +276,6 @@ Their default provider URL is `http://host.docker.internal:11434/v1`; Compose
 maps that hostname to the Docker host for Linux engines with
 `host.docker.internal:host-gateway`.
 
-`ai-gateway /readyz` distinguishes these states per purpose:
-
-- `missing`: the chat, embedding, or rerank profile/active credential is absent.
-- `placeholder`: the seeded local fake credential is still configured.
-- `ok`: a non-placeholder credential is configured for the profile.
-
-`ok` only means the profile configuration no longer matches the known local
-placeholder. It does not prove the external provider accepted the key; run the
-env-gated real-provider smoke in
-`docs/services/ai-gateway/docs/seed-runbook.md` before recording cross-service
-AI validation.
-
 ## Request Id Troubleshooting
 
 Every service returns or propagates `X-Request-Id`.
@@ -386,22 +304,9 @@ Invoke-WebRequest "http://localhost:8080/api/v1/documents/<documentId>/content" 
 Invoke-RestMethod "http://localhost:8080/api/v1/knowledge-queries" -Method Post -Headers $headers -ContentType "application/json" -Body '{"query":"local demo","topK":3}'
 ```
 
-The default Compose profile validates File Service upload/content handoff,
-Parser Service parsing, Redis/asynq enqueue/worker execution, PostgreSQL state,
-and gateway request-id propagation. It uses local hashing embeddings and an
-in-memory vector index unless `KNOWLEDGE_QDRANT_URL` is set.
-
-For real Qdrant smoke, create or verify the `knowledge_chunks` collection before
-setting `KNOWLEDGE_QDRANT_URL=http://qdrant:6333`; otherwise ingestion and query
-calls return `502 dependency_error` from the Qdrant adapter. For real AI Gateway
-embedding or rerank smoke, start `docker compose --profile ai up -d --build`,
-replace the seeded fake provider credential with a usable one, then set
-`EMBEDDING_PROVIDER=ai_gateway`, `KNOWLEDGE_AI_GATEWAY_BASE_URL=http://ai-gateway:8086`,
-and the relevant profile/model variables.
-
-Knowledge's default local path uses deterministic local hashing embeddings and
-empty rerank configuration. Do not count that path as real AI Gateway
-embedding/rerank validation.
+Knowledge routes require the vendor RAGFlow runtime at `VENDOR_RUNTIME_URL`
+(default `http://host.docker.internal:9380`) plus Elasticsearch/MinIO when using
+the `knowledge-v2` compose profile. See `services/knowledge/runtime/README.md`.
 
 ## Common Dependency Failures
 
@@ -409,8 +314,7 @@ embedding/rerank validation.
 | --- | --- | --- |
 | `gateway /readyz` returns `503 dependency_error` | Redis, auth, or required owner service base URL configuration is not ready | `docker compose ps`, `docker compose logs redis auth gateway` |
 | `auth /readyz` returns `postgres unavailable` | Auth migration or PostgreSQL failed | `docker compose logs postgres migrate-auth auth` |
-| Knowledge upload returns `502 dependency_error` | File Service, Parser Service, or Redis queue unavailable | `docker compose logs file parser knowledge redis` |
-| Knowledge query returns `502 dependency_error` | Qdrant collection missing, AI Gateway embedding/rerank unavailable, or fake provider credential still configured | `docker compose logs knowledge qdrant ai-gateway` |
+| Knowledge upload/query returns `502 dependency_error` | Vendor runtime unreachable or ES/MinIO not ready | `docker compose logs knowledge`, verify vendor :9380 and `knowledge-v2` profile |
 | Document readyz returns dependency error | Document DB migration failed or DB is unreachable | `docker compose logs migrate-document document postgres` |
 | QA message call fails on model invocation | AI Gateway profile is not running, fake local credential is still in use, or host provider is not listening on `host.docker.internal:11434` | `docker compose --profile ai ps`, `docker compose logs ai-gateway qa` |
 | MinIO bucket missing | `minio-init` did not complete | `docker compose logs minio minio-init` |
