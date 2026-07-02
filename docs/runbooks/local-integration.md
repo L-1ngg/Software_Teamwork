@@ -24,6 +24,13 @@ owner service base URL 配置，但不请求 Knowledge、QA、Document 或 AI Ga
 调用可用。完整跨服务可用性必须使用下方 targeted smoke 或 #125/#352 的脚本化
 检查记录。
 
+Seed maintenance notes:
+
+- The local demo seed keeps `usr_local_admin`, `doc_local_demo_seed`, `22222222-2222-4222-8222-222222222301`, and `33333333-3333-4333-8333-333333333301`.
+- The admin password record uses `argon2id`, and rotation / refresh steps stay CI-safe and local/manual only.
+- Admin runtime config docs should mention `/api/v1/admin/parser-configs`, `admin:model-profile:write`, `admin:parser-config:write`, and `system:admin` or admin runtime config permissions.
+- Use the `cleanup` seed for targeted teardown; fall back to `docker compose down -v` when you want a full volume reset.
+
 ## 前置依赖
 
 | 工具 | 当前基线 | 用途 |

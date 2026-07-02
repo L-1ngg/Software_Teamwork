@@ -177,6 +177,21 @@ class DockerPolicyTests(unittest.TestCase):
 
         self.assertEqual([], issues)
 
+    def test_non_parser_compose_env_does_not_require_parser_build_args(self) -> None:
+        compose = textwrap.dedent(
+            """
+            services:
+              qa:
+                image: ${QA_IMAGE:-registry.example.com/software-teamwork/qa:REPLACE_WITH_TAG}
+                environment:
+                  PARSER_CONFIG_ROUTE: /api/v1/admin/parser-configs
+            """
+        )
+
+        issues = self.verify(files={"deploy/docker-compose.production.yml": compose})
+
+        self.assertEqual([], issues)
+
     def test_ragflow_uv_sync_does_not_trigger_parser_policy(self) -> None:
         dockerfile = textwrap.dedent(
             """

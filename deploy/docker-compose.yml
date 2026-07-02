@@ -102,7 +102,8 @@ services:
       args:
         IMAGE_REGISTRY_PREFIX: ${DOCKER_IMAGE_REGISTRY_PREFIX:-}
         RAGFLOW_DEPS_IMAGE: ${RAGFLOW_DEPS_IMAGE:-infiniflow/ragflow_deps:51ce6aab}
-    command: ["./entrypoint.sh", "--disable-taskexecutor"]
+        NEED_MIRROR: ${NEED_MIRROR:-0}
+    command: ["--disable-taskexecutor"]
     environment:
       DB_TYPE: postgres
       DOC_ENGINE: ${DOC_ENGINE:-elasticsearch}
@@ -128,6 +129,13 @@ services:
       OPENDATALOADER_APISERVER: ${OPENDATALOADER_APISERVER:-}
       OPENDATALOADER_API_KEY: ${OPENDATALOADER_API_KEY:-}
       OPENDATALOADER_TIMEOUT: ${OPENDATALOADER_TIMEOUT:-600}
+      KNOWLEDGE_RUNTIME_MODEL_API_KEY: ${KNOWLEDGE_RUNTIME_MODEL_API_KEY:-}
+      KNOWLEDGE_RUNTIME_EMBEDDING_FACTORY: ${KNOWLEDGE_RUNTIME_EMBEDDING_FACTORY:-Builtin}
+      KNOWLEDGE_RUNTIME_EMBEDDING_MODEL: ${KNOWLEDGE_RUNTIME_EMBEDDING_MODEL:-bge-m3}
+      KNOWLEDGE_RUNTIME_EMBEDDING_BASE_URL: ${KNOWLEDGE_RUNTIME_EMBEDDING_BASE_URL:-http://127.0.0.1:6380}
+      KNOWLEDGE_RUNTIME_RERANK_FACTORY: ${KNOWLEDGE_RUNTIME_RERANK_FACTORY:-}
+      KNOWLEDGE_RUNTIME_RERANK_MODEL: ${KNOWLEDGE_RUNTIME_RERANK_MODEL:-}
+      KNOWLEDGE_RUNTIME_RERANK_BASE_URL: ${KNOWLEDGE_RUNTIME_RERANK_BASE_URL:-}
     expose:
       - "9380"
     depends_on:
@@ -156,7 +164,8 @@ services:
       args:
         IMAGE_REGISTRY_PREFIX: ${DOCKER_IMAGE_REGISTRY_PREFIX:-}
         RAGFLOW_DEPS_IMAGE: ${RAGFLOW_DEPS_IMAGE:-infiniflow/ragflow_deps:51ce6aab}
-    command: ["./entrypoint.sh", "--disable-webserver", "--workers=${KNOWLEDGE_RUNTIME_WORKERS:-2}"]
+        NEED_MIRROR: ${NEED_MIRROR:-0}
+    command: ["--disable-webserver", "--workers=${KNOWLEDGE_RUNTIME_WORKERS:-2}"]
     environment:
       DB_TYPE: postgres
       DOC_ENGINE: ${DOC_ENGINE:-elasticsearch}
@@ -182,6 +191,13 @@ services:
       OPENDATALOADER_APISERVER: ${OPENDATALOADER_APISERVER:-}
       OPENDATALOADER_API_KEY: ${OPENDATALOADER_API_KEY:-}
       OPENDATALOADER_TIMEOUT: ${OPENDATALOADER_TIMEOUT:-600}
+      KNOWLEDGE_RUNTIME_MODEL_API_KEY: ${KNOWLEDGE_RUNTIME_MODEL_API_KEY:-}
+      KNOWLEDGE_RUNTIME_EMBEDDING_FACTORY: ${KNOWLEDGE_RUNTIME_EMBEDDING_FACTORY:-Builtin}
+      KNOWLEDGE_RUNTIME_EMBEDDING_MODEL: ${KNOWLEDGE_RUNTIME_EMBEDDING_MODEL:-bge-m3}
+      KNOWLEDGE_RUNTIME_EMBEDDING_BASE_URL: ${KNOWLEDGE_RUNTIME_EMBEDDING_BASE_URL:-http://127.0.0.1:6380}
+      KNOWLEDGE_RUNTIME_RERANK_FACTORY: ${KNOWLEDGE_RUNTIME_RERANK_FACTORY:-}
+      KNOWLEDGE_RUNTIME_RERANK_MODEL: ${KNOWLEDGE_RUNTIME_RERANK_MODEL:-}
+      KNOWLEDGE_RUNTIME_RERANK_BASE_URL: ${KNOWLEDGE_RUNTIME_RERANK_BASE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -411,6 +427,8 @@ services:
       VENDOR_RUNTIME_URL: ${VENDOR_RUNTIME_URL:-http://knowledge-runtime-api:9380}
       DATABASE_URL: postgres://knowledge_app:knowledge_app_dev@postgres:5432/knowledge_system?sslmode=disable
       KNOWLEDGE_AUTO_START_INGESTION: ${KNOWLEDGE_AUTO_START_INGESTION:-true}
+      KNOWLEDGE_VENDOR_EMBEDDING_ID: ${KNOWLEDGE_VENDOR_EMBEDDING_ID:-}
+      KNOWLEDGE_VENDOR_RERANK_ID: ${KNOWLEDGE_VENDOR_RERANK_ID:-}
       DOC_ENGINE: ${DOC_ENGINE:-elasticsearch}
     ports:
       - "${KNOWLEDGE_HTTP_PORT:-8083}:8083"
@@ -443,8 +461,6 @@ services:
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-dev-internal-service-token-change-me}
       KNOWLEDGE_SERVICE_URL: http://knowledge:8083
       FILE_SERVICE_BASE_URL: http://file:8082
-      PARSER_SERVICE_BASE_URL: http://parser:8087
-      PARSER_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-dev-internal-service-token-change-me}
       AI_GATEWAY_URL: http://ai-gateway:8086/internal/v1/chat/completions
       AI_GATEWAY_TOKEN: ${INTERNAL_SERVICE_TOKEN:-local-dev-internal-service-token-change-me}
       AI_GATEWAY_TOKEN_HEADER: X-Service-Token
@@ -470,8 +486,6 @@ services:
       knowledge:
         condition: service_healthy
       file:
-        condition: service_healthy
-      parser:
         condition: service_healthy
       document:
         condition: service_healthy

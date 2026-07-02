@@ -276,6 +276,13 @@ Their default provider URL is `http://host.docker.internal:11434/v1`; Compose
 maps that hostname to the Docker host for Linux engines with
 `host.docker.internal:host-gateway`.
 
+Seed contract notes:
+
+- The deterministic demo rows include `usr_local_admin`, `doc_local_demo_seed`, `22222222-2222-4222-8222-222222222301`, and `33333333-3333-4333-8333-333333333301`.
+- The seeded admin password is hashed with `argon2id`, and rotation / refresh flows stay CI-safe for local/manual demo maintenance.
+- Admin runtime config coverage includes `/api/v1/admin/parser-configs`, `admin:model-profile:write`, `admin:parser-config:write`, and `system:admin` or admin runtime config permissions.
+- Use `cleanup` rows from `deploy/seeds/099-local-demo-cleanup.sql` for targeted teardown; use `docker compose down -v` for a full manual reset.
+
 ## Request Id Troubleshooting
 
 Every service returns or propagates `X-Request-Id`.

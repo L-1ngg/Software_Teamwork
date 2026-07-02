@@ -321,7 +321,7 @@ def validate_compose_image_default(rel: str, line_no: int, image: str) -> list[s
 
 
 def is_parser_compose_file(content: str) -> bool:
-    return "services/parser" in content or "PARSER_" in content
+    return "context: ../services/parser" in content or "parser-service" in content
 
 
 def validate_china_env(root: Path) -> list[str]:
